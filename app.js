@@ -5,10 +5,12 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const K = { orders: 'kpc:orders', over: 'kpc:overrides', meta: 'kpc:meta', cat: 'kpc:catalog-cache', msg: 'kpc:msg', pset: 'kpc:psettings' };
 const DEV = /[?&]dev=[12]/.test(location.search);               // ?dev=1 — тестовый движок-заглушка; ?dev=2 — ещё и тестовый каталог (только для проверки вёрстки)
 const DEV_CAT = /[?&]dev=2/.test(location.search);
+const DB_NAME = DEV ? 'kpc-dev' : ((document.querySelector('meta[name="kpc-db"]') || {}).content || 'kpc');   // у личной сборки своя база: на github.io все репозитории аккаунта делят одно хранилище браузера
+const LS_PREFIX = DB_NAME === 'kpc' ? '' : DB_NAME + '|';
 const FIXED = ['kitchen', 'wardrobe'];                          // изделия с готовым бланком
 const FREE_DEFAULT = { chest: 'Комод', nightstand: 'Тумба', installation: 'Шкаф-инсталляция', custom: 'Индивидуальное' };
 const NAMES_FALLBACK = Object.assign({ kitchen: 'Кухня', wardrobe: 'Шкаф' }, FREE_DEFAULT);
@@ -63,6 +65,7 @@ const ICON = {
   ruler: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-1.5-4-5-4-5-2 0 1.500 2.500 2 5 2zM12 8c1.500-4 5-4 5-2 0 1.500-2.500 2-5 2z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 118 0v4"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
   refresh: '<path d="M20 11a8 8 0 00-14-4M4 4v4h4M4 13a8 8 0 0014 4M20 20v-4h-4"/>'
@@ -95,8 +98,8 @@ let idb = null;
 function idbOpen() {
   return new Promise((res, rej) => {
     try {
-      const r = indexedDB.open(DEV ? 'kpc-dev' : 'kpc', 2);
-      r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos'); };
+      const r = indexedDB.open(DB_NAME, 3);
+      r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv'); if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos'); if (!d.objectStoreNames.contains('secure')) d.createObjectStore('secure'); };
       r.onsuccess = () => { r.result.onversionchange = () => r.result.close(); res(r.result); };
       r.onerror = () => rej(r.error);
       setTimeout(() => rej(new Error('база занята другой вкладкой — закройте её')), 6000);   // старая вкладка может держать базу при обновлении
@@ -113,10 +116,10 @@ function idbLoadAll(db) {
 }
 async function initStorage() {
   try { idb = await idbOpen(); Object.assign(KV, await idbLoadAll(idb)); S.store = 'IndexedDB'; }
-  catch (e) { idb = null; S.store = 'localStorage (запасной)'; [K.orders, K.over, K.meta, K.cat].forEach(k => { try { const v = localStorage.getItem(k); if (v != null) KV[k] = JSON.parse(v); } catch (_) {} }); }
+  catch (e) { idb = null; S.store = 'localStorage (запасной)'; [K.orders, K.over, K.meta, K.cat].forEach(k => { try { const v = localStorage.getItem(LS_PREFIX + k); if (v != null) KV[k] = JSON.parse(v); } catch (_) {} }); }
   // перенос из localStorage, если когда-то данные лежали там
   if (idb && KV[K.orders] === undefined) {
-    [K.orders, K.over, K.meta].forEach(k => { try { const v = localStorage.getItem(k); if (v != null) { KV[k] = JSON.parse(v); kvWrite(k, KV[k]); } } catch (_) {} });
+    if (DB_NAME === 'kpc') [K.orders, K.over, K.meta].forEach(k => { try { const v = localStorage.getItem(k); if (v != null) { KV[k] = JSON.parse(v); kvWrite(k, KV[k]); } } catch (_) {} });
   }
   // просим постоянное хранилище и запоминаем ответ
   try {
@@ -132,8 +135,21 @@ function kvWrite(k, v) {
       const tx = idb.transaction('kv', 'readwrite'); tx.objectStore('kv').put(JSON.parse(JSON.stringify(v)), k);
       tx.onerror = tx.onabort = () => storeFail();
     } catch (e) { storeFail(); }
-  } else { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { storeFail(); } }
+  } else { try { localStorage.setItem(LS_PREFIX + k, JSON.stringify(v)); } catch (e) { storeFail(); } }
 }
+const secStore = mode => idb.transaction('secure', mode).objectStore('secure');
+const secGet = key => new Promise(res => {
+  if (!idb) return res(null);
+  try { const r = secStore('readonly').get(key); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch (e) { res(null); }
+});
+const secPut = (key, val) => new Promise((res, rej) => {
+  if (!idb) return rej(new Error('Хранилище недоступно'));
+  try { const tx = idb.transaction('secure', 'readwrite'); tx.objectStore('secure').put(val, key); tx.oncomplete = () => res(); tx.onerror = tx.onabort = () => rej(tx.error); } catch (e) { rej(e); }
+});
+const secDel = key => new Promise(res => {
+  if (!idb) return res();
+  try { const tx = idb.transaction('secure', 'readwrite'); tx.objectStore('secure').delete(key); tx.oncomplete = () => res(); tx.onerror = tx.onabort = () => res(); } catch (e) { res(); }
+});
 function storeFail() { if (storageOk) { storageOk = false; toast('Не удалось сохранить на телефоне — сделайте копию данных'); } }
 const lsGet = (k, def) => (KV[k] === undefined ? def : KV[k]);
 function lsSet(k, v) { KV[k] = v; kvWrite(k, v); return true; }
@@ -1247,6 +1263,8 @@ function renderSettings(app) {
   }).join('');
   setScreen(app, `<div class="top"><a class="ibtn" href="#/" aria-label="Назад">${svg('back')}</a><h1>Настройки<span class="sub">коэффициент и логистика</span></h1></div>
     <div class="wrap stack"><div class="warnbox" style="background:var(--acc-soft);border-color:#C5D8CE;color:var(--ink)"><b>Цена клиенту = закупка × коэффициент + логистика.</b><br>Эти значения подставляются во все новые и старые расчёты; в «Настройках изделия» внутри заказа можно задать своё значение — оно главнее.</div>
+      ${S.personal ? `<div class="card stack"><h2 style="font-size:17px">${svg('lock')} Защита справочника</h2><p class="hint" style="margin:0">Справочник цен расшифрован и хранится на этом телефоне. Если телефон потеряете или отдадите — сотрите его: при следующем запуске снова понадобится пароль. Ваши заказы не удаляются.</p>
+        <button class="btn ghost danger block" data-act="lock-erase">Заблокировать и стереть справочник с этого телефона</button></div>` : ''}
       ${rows}<p class="hint">Пустое поле — значение из справочника (серая подсказка). Настройки хранятся только на этом телефоне и входят в файл «Мои цены» и в копию.</p></div>${tabsHtml('')}`);
 }
 /* ───────────── «Мои цены»: файл ───────────── */
@@ -1525,12 +1543,27 @@ document.addEventListener('click', async e => {
         S.over = { prices: {}, added: [] }; saveOver(); buildEff(); renderPrices($('#app')); toast('Мои цены сброшены');
       }
       break;
+    case 'lock-erase':
+      if (await confirmDlg('Расшифрованный справочник (цены и коэффициенты) будет удалён с этого телефона, приложение снова спросит пароль. Заказы останутся.', 'Стереть и заблокировать', true, 'Заблокировать')) {
+        await secDel('catalog'); lsSet(K.cat, null); S.base = null; S.eff = null; location.hash = '#/'; location.reload();
+      }
+      break;
     case 'load-prices': $('#pfile').click(); break;
     case 'save-prices': savePricesFile(); break;
     case 'save-backup': saveBackup(); break;
     case 'share-backup': shareBackup(); break;
     case 'load-backup': $('#bfile').click(); break;
     case 'reload-catalog': {
+      if (S.personal) {
+        toast('Загружаю зашифрованный справочник…');
+        let enc; try { const rr = await fetch('data/catalog.enc.json', { cache: 'no-store' }); if (!rr.ok) throw new Error('HTTP ' + rr.status); enc = await rr.json(); } catch (e) { toast('Нет связи — остался прежний справочник'); break; }
+        const rp = await showSheet({ title: 'Пароль от справочника', body: '<label class="fld">Пароль<input data-focus id="up" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></label><p class="hint" id="upe" style="color:var(--warn)" hidden></p>',
+          buttons: [{ label: 'Обновить', kind: 'go', value: 'ok', primary: true }, { label: 'Отмена', kind: 'ghost', value: null }], collect: w => $('#up', w).value });
+        if (rp.btn !== 'ok') break;
+        const dr = await tryDecrypt(enc, rp.data);
+        if (!dr.ok) { toast(dr.error); break; }
+        await secPut('catalog', dr.cat); S.base = dr.cat; buildEff(); toast('Справочник обновлён'); renderData($('#app')); break;
+      }
       toast('Загружаю справочник…');
       const ok = await loadCatalog(true);
       if (ok) { buildEff(); toast('Справочник обновлён'); } else toast('Не удалось загрузить — остался прежний');
@@ -1607,6 +1640,10 @@ async function loadCatalog(force) {
   const url = DEV_CAT ? 'dev-catalog.json' : 'data/catalog.json';
   try {
     const r = await fetch(url, { cache: 'no-store' });
+    if (r.status === 404 && !DEV_CAT) {                                   // личная сборка: открытого справочника нет, есть зашифрованный
+      const e = await fetch('data/catalog.enc.json', { cache: 'no-store' });
+      if (e.ok) { S.enc = await e.json(); return 'enc'; }
+    }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
     if (!j.products) throw new Error('нет products');
@@ -1621,6 +1658,39 @@ async function loadCatalog(force) {
     return false;
   }
 }
+/** Расшифровать справочник паролем: {ok, cat} или {ok: false, error}. */
+async function tryDecrypt(enc, pass) {
+  try {
+    const bytes = await KPCrypto.decryptLoose(enc, pass);
+    const cat = JSON.parse(new TextDecoder().decode(bytes));
+    if (!cat || !cat.products) throw new Error('в файле нет справочника');
+    return { ok: true, cat };
+  } catch (e) { return { ok: false, error: KPCrypto.explain(e) }; }
+}
+/** Полноэкранный ввод пароля; выполняется, когда справочник расшифрован и сохранён в этом телефоне. */
+function unlockScreen(enc) {
+  return new Promise(res => {
+    const app = $('#app'); app.className = 'app'; document.body.classList.remove('bar-on');
+    app.innerHTML = `<div class="lock"><form class="card stack lock-card" id="lk-form" autocomplete="off">
+      <h1>${svg('lock')} Введите пароль</h1>
+      <p class="hint">Справочник цен зашифрован. После ввода он сохранится на этом телефоне, и пароль больше спрашивать не будут (кнопка «Заблокировать» — в «Настройках»).</p>
+      <label class="fld">Пароль<div class="pw"><input id="lk-pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"><button type="button" class="ibtn" id="lk-eye" aria-label="Показать пароль">${svg('eye')}</button></div></label>
+      <div class="lk-err" id="lk-err" role="alert" hidden></div>
+      <button class="btn go block" id="lk-go" type="submit">Открыть</button></form></div>`;
+    const pw = $('#lk-pw'), err = $('#lk-err'), go = $('#lk-go');
+    setTimeout(() => pw.focus(), 50);
+    $('#lk-eye').onclick = () => { const show = pw.type === 'password'; pw.type = show ? 'text' : 'password'; $('#lk-eye').setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль'); pw.focus(); };
+    $('#lk-form').onsubmit = async e => {
+      e.preventDefault();
+      if (!pw.value) { err.textContent = 'Введите пароль'; err.hidden = false; return; }
+      go.disabled = true; go.textContent = 'Расшифровываю…'; err.hidden = true;
+      const r = await tryDecrypt(enc, pw.value);
+      if (!r.ok) { err.textContent = r.error; err.hidden = false; go.disabled = false; go.textContent = 'Открыть'; pw.select(); return; }
+      try { await secPut('catalog', r.cat); } catch (e2) { toast('Не удалось сохранить справочник на телефоне — пароль будет спрашиваться снова'); }
+      res(r.cat);
+    };
+  });
+}
 function loadScript(src) {
   return new Promise(res => { const s = document.createElement('script'); s.src = src; s.onload = () => res(true); s.onerror = () => res(false); document.head.appendChild(s); });
 }
@@ -1632,7 +1702,17 @@ async function boot() {
   loadState();
   if (DEV && !window.KPEngine) await loadScript('dev-engine.js');
   if (!window.KPEngine) return fatal('Не загружен движок расчёта', 'Файл <code>engine/engine.js</code> недоступен. Откройте приложение через <code>server.py</code> с компьютера (и один раз — при включённом интернете/Wi-Fi).');
-  if (!(await loadCatalog())) return fatal('Нет справочника цен', 'Не удалось загрузить <code>data/catalog.json</code> (' + esc(S.loadError || '') + '). Первый запуск требует связи с компьютером или сервером.');
+  const saved = DEV ? null : await secGet('catalog');            // личная сборка: справочник уже расшифрован на этом телефоне
+  if (saved && saved.products) { S.base = saved; S.catSrc = 'личный, расшифрован'; S.personal = true; }
+  else {
+    const lc = await loadCatalog();
+    if (lc === 'enc') {
+      S.personal = true;
+      if (!window.KPCrypto) return fatal('Не загружен модуль шифрования', 'Файл <code>crypto.js</code> недоступен.');
+      S.base = await unlockScreen(S.enc); S.catSrc = 'личный, расшифрован';
+    }
+    else if (!lc) return fatal('Нет справочника цен', 'Не удалось загрузить <code>data/catalog.json</code> (' + esc(S.loadError || '') + '). Первый запуск требует связи с компьютером или сервером.');
+  }
   buildEff();
   if (DEV) document.title = 'Расчёт (тестовые данные)';
   render();

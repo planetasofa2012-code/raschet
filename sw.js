@@ -4,12 +4,14 @@
  * Обновление: поменяйте VERSION — старый кэш удалится при активации новой версии.
  * Работает только на HTTPS или http://localhost (требование браузеров).
  */
-const VERSION = 'v1.4.0';
-const CACHE = 'kpc-shell-' + VERSION;
+const VERSION = 'v1.5.0';
+const SCOPE_KEY = self.registration.scope.replace(/[^a-z0-9]+/gi, '_');
+const PREFIX = 'kpc-shell-' + SCOPE_KEY;
+const CACHE = PREFIX + VERSION;
 const NET_TIMEOUT = 3500;
 const SHELL = [
-  './', 'index.html', 'app.js', 'area.js', 'lines.js', 'message.js', 'prices.js', 'style.css', 'manifest.json',
-  'engine/engine.js', 'data/catalog.json',
+  './', 'index.html', 'app.js', 'area.js', 'lines.js', 'message.js', 'prices.js', 'crypto.js', 'style.css', 'manifest.json',
+  'engine/engine.js', 'data/catalog.json', 'data/catalog.enc.json',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
@@ -25,7 +27,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k.startsWith('kpc-shell-') && k !== CACHE).map(k => caches.delete(k)));
+    await Promise.all(keys.filter(k => (k.startsWith(PREFIX) && k !== CACHE) || /^kpc-shell-v\d/.test(k)).map(k => caches.delete(k)));
     await self.clients.claim();
   })());
 });

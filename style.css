@@ -314,3 +314,14 @@ a.btn{text-decoration:none}
 .steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .coefwarn{display:block;text-decoration:none;color:#6B4E1F;font-size:14.5px;background:#FBF1D9;border-color:#E6D3AE}
 .welcome{border-color:#AFC4BA}
+
+/* экран пароля личной сборки */
+.lock{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px}
+.lock-card{width:100%;max-width:420px}
+.lock-card h1{font-size:24px;display:flex;align-items:center;gap:10px}
+.lock-card h1 svg{width:26px;height:26px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pw{display:flex;gap:6px;align-items:center}
+.pw input{flex:1;min-height:52px;font-size:18px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.pw input:focus{outline:2px solid var(--acc);outline-offset:1px}
+.lk-err{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14.5px}
+h2 svg{width:20px;height:20px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:4px}
