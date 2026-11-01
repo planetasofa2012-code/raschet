@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Расчёт изделий</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2E5A4C">
+<meta name="description" content="Расчёт кухни, шкафа и других изделий на телефоне">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Расчёт">
+<link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="app"></div>
+<div id="toast" class="toast" hidden></div>
+<noscript><p style="padding:20px">Для работы нужен JavaScript.</p></noscript>
+<!-- Движок расчёта: общий для браузера и Node (контракт — 2_tz.md). Без CDN. -->
+<script src="engine/engine.js"></script>
+<script src="area.js"></script>
+<script src="lines.js"></script>
+<script src="message.js"></script>
+<script src="prices.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
